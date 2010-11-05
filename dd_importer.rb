@@ -132,35 +132,6 @@ class DdImporter
     '0700', '1700', '2700', '3700', '4700', # Bacich PE
   ]
   
-  def self.clean_date(raw_date)
-    if raw_date
-      date = raw_date.gsub(/-/, "/").strip
-      mo = nil
-      da = nil
-      yr = nil
-      if date.match(/^(\d+)\/(\d+)\/(\d+)(\s|$)/)
-        mo = $1.to_i
-        da = $2.to_i
-        yr = $3.to_i
-      elsif date.match(/^(\d+)\/(\d+)(\s|$)/)
-        mo = $1.to_i
-        da = 1
-        yr = $2.to_i
-      end
-      if mo && da && yr
-        if yr < 20
-          yr += 2000
-        elsif yr < 100
-          yr += 1900
-        end
-        if mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr > 1900 && yr < 2020
-          return sprintf("%02d/%02d/%04d", mo, da, yr)
-        end
-      end
-    end
-    nil
-  end
-  
   def self.name
     "DataDirector Export"
   end
@@ -236,11 +207,11 @@ class DdImporter
       set_student(studentid, :zip,        row[:zip])
       set_student(studentid, :phone_number,          row[:home_phone])
       set_student(studentid, :parent_education,      row[:ca_parented])
-      set_student(studentid, :birthdate,             DdImporter.clean_date(row[:dob]))
-      set_student(studentid, :date_entered_school,   DdImporter.clean_date(row[:schoolentrydate]))
-      set_student(studentid, :date_entered_district, DdImporter.clean_date(row[:districtentrydate]))
-      set_student(studentid, :first_us_entry_date,   DdImporter.clean_date(row[:ca_firstusaschooling]))
-      set_student(studentid, :date_rfep,             DdImporter.clean_date(row[:ca_daterfep]))
+      set_student(studentid, :birthdate,             clean_date(row[:dob]))
+      set_student(studentid, :date_entered_school,   clean_date(row[:schoolentrydate]))
+      set_student(studentid, :date_entered_district, clean_date(row[:districtentrydate]))
+      set_student(studentid, :first_us_entry_date,   clean_date(row[:ca_firstusaschooling]))
+      set_student(studentid, :date_rfep,             clean_date(row[:ca_daterfep]))
 
       hispanic_ethnicity = (row[:fedethnicity].to_i == 1) ? '500' : nil
       set_student(studentid, :ethnicity,             hispanic_ethnicity)
@@ -277,7 +248,7 @@ class DdImporter
     # we bail after we get the first race...
     process_csv("#{@input_dir}/dd-races.txt", true) do |row|
       studentid = row[:studentid]
-      next unless @students.has_key?(studentid)
+      next unless current_student?(studentid)
       race = row[:racecd]
       set_student(studentid, :ethnicity, race) unless student(studentid, :ethnicity)
     end
@@ -286,7 +257,7 @@ class DdImporter
   def analyze_program_data
     process_csv("#{@input_dir}/dd-programs.txt", true) do |row|
       studentid = row[:foreignkey]
-      next unless @students.has_key?(studentid)
+      next unless current_student?(studentid)
       
       program_code = (row[:user_defined_text] || 0).to_i
       case program_code
@@ -361,19 +332,24 @@ class DdImporter
       process_csv("#{@input_dir}/#{fname}", STUDENT_SCHEDULES_HEADERS) do |row|
         courseid  = row[:course_number]
         next if EXCLUDED_COURSES.include?(courseid)
-      
+  
         studentid = row[:studentid]
-        userid    = row[:teacherid]
+        next unless current_student?(studentid)
+        
         sectionid = row[:sectionid]
         next if sectionid.nil?
         sectionid.gsub!(/^[-]/, '')
+        
         period = expression_to_period(row[:expression])
         next if period.nil?
+        
         term   = term_abbreviation(row[:abbreviation])
         next if term.nil?
+        
         memberid = "#{courseid}-#{studentid}"
         year = term_to_year_abbr(row[:termid].gsub(/^[-]/, ''))
       
+        userid = row[:teacherid]
         set_teacher_year(year, userid, :active, 'y')
       
         set_roster(year, memberid, :ssid,        student(studentid, :ssid))
@@ -504,12 +480,16 @@ class DdImporter
     @users[userid][key]
   end
   
+  def current_student?(studentid)
+    @students.has_key?(studentid)
+  end
+  
   def set_student(studentid, key, value)
     (@students[studentid] ||= { })[key] = value
   end
   
   def student(studentid, key)
-    return nil unless @students.has_key?(studentid)
+    return nil unless current_student?(studentid)
     @students[studentid][key]
   end
   
@@ -601,40 +581,45 @@ class DdImporter
     "#{abbr}#{suffix}"
   end
   
-  def parse_date(s)
-    m, d, y = s.split(/[-\/]/).collect { |part| part.strip.empty? ? nil : part.to_i }
-    if y.nil?
-      # no year specified
-      if d.nil?
-        # raise "unrecognized date format: #{s}"
-        # assume y: convert to 1/1/y
-        y = m
-        m = 1
-        d = 1
-      else
-        # assume m/y: convert to m/1/y
-        y = d
-        d = 1
+  def split_date(raw_date)
+    if raw_date
+      date = raw_date.gsub(/-/, "/").strip
+      mo = nil
+      da = nil
+      yr = nil
+      if date.match(/^(\d+)\/(\d+)\/(\d+)(\s|$)/)
+        mo = $1.to_i
+        da = $2.to_i
+        yr = $3.to_i
+      elsif date.match(/^(\d+)\/(\d+)(\s|$)/)
+        mo = $1.to_i
+        da = 1
+        yr = $2.to_i
+      end
+      if mo && da && yr
+        if yr < 20
+          yr += 2000
+        elsif yr < 100
+          yr += 1900
+        end
+        unless mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr > 1900 && yr < 2020
+          mo = nil
+          da = nil
+          yr = nil
+        end
       end
     end
-    if !m.nil? && m > 1900 
-      # assume y/m/d
-      t = y
-      y = m
-      m = d
-      d = t
-    end
-    raise "invalid month" if m.nil? || m < 1 || m > 12
-    raise "invalid day" if d.nil? || d < 1 || d > 31
-    if !y.nil?
-      if y < 20
-        y += 2000
-      elsif y < 100
-        y += 1900
-      end
-    end
-    raise "invalid year" if y.nil? || y < 1940 || y > 2015
-    return Date.new(y, m, d)
+    [mo, da, yr]
+  end
+  
+  def clean_date(raw_date)
+    mo, da, yr = split_date(raw_date)
+    mo.nil? ? nil : sprintf("%02d/%02d/%04d", mo, da, yr)
+  end
+  
+  def parse_date(raw_date)
+    mo, da, yr = split_date(raw_date)
+    mo.nil? ? nil : Date.new(yr, mo, da)
   end
   
   def date_to_year_abbr(entrydate)
