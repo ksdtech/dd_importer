@@ -1,0 +1,50 @@
+DataDirector import file generator
+
+CANNOT BE FULLY AUTOMATED, because PowerSchool will not AutoSend
+race and program information!
+
+1. RACE INFORMATION
+In tech/usm go to StudentRace
+Export these fields tab-delimited (LF line endings)
+
+studentid
+racecd
+
+Move exported file to psexport/dd-races.txt
+
+2. PROGRAM INFORMATION
+In tech/usm go to VirtualTablesData2
+Select on Related_to_Table = StudentProgram
+Export these fields tab-delimited (LF line endings)
+
+foreignkey
+user_defined_text
+user_defined_text2
+custom
+user_defined_date
+user_defined_date2
+
+Move exported file to psexport/dd-programs.txt
+
+title_1 is program code 122, NCLB Title I Part A Basic Targeted
+gate is program code 127, Gifted and Talented Education (GATE)
+migrant_ed is program code 135, Title I Part C Migrant
+special_program is program code 144, Special Education
+nslp is program code 175, Free or Reduced Price Meal Program
+
+3. AUTOSEND SETUP
+Set up AutoSend in PowerSchool for nightly updates.  Use the fields
+listed in STUDENTS_HEADERS, TEACHERS_HEADERS, COURSES_HEADERS and
+STUDENT_SCHEDULES_HEADERS in the AutoSend files. Make sure AutoSend
+files are tab-delimited with LF line endings.  Note that you can only
+send Students and Teachers from District Office.  Courses and Student
+Schedules AutoSends must be established AT EVERY SCHOOL.
+
+4. TODO: ELL Demographics
+These fields will be put into a separate demographics file unless 
+our consortium agrees to add them:
+
+CA_EL
+CA_DateEnroll
+CA_ELProfELA
+CA_ELLt12Mos
