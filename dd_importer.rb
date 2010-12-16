@@ -1,6 +1,9 @@
-require 'yaml'
+require 'configatron'
 require 'faster_csv'
 require 'ftools'
+require 'net/https'
+require 'net_digest_auth'
+require 'uri'
 
 class DdImporter
   ### NOTE: the field numbers for custom fields will be different
@@ -132,18 +135,21 @@ class DdImporter
     '0700', '1700', '2700', '3700', '4700', # Bacich PE
   ]
   
-  def self.name
-    "DataDirector Export"
+  def name
+    "DataDirector Upload"
   end
   
-  OPTIONS = { 'output_base_dir' => '.', 'year' => '10-11' }
-  
   def options
-    OPTIONS
+    @options ||= configatron.configure_from_yaml('./app_config.yml')
   end
   
   def at(progress, total, message)
     puts "at #{progress}/#{total}: #{message}"
+  end
+  
+  def tick_message(message, incr=0)
+    @working_at += incr if incr > 0
+    at(@working_at, @total_work_units, message)
   end
   
   def perform
@@ -155,45 +161,95 @@ class DdImporter
     @teacher_years = { }
     @custom_fields = { }
     
-    output_base_dir = options['output_base_dir'] or raise "No output_base_dir specified"
+    output_base_dir = options['exporter']['output_base_dir'] or raise "No output_base_dir specified"
     
-    @zip_name = "Kentfield-#{Time.now.strftime("%Y%m%d")}"
     @data_dir = File.expand_path(output_base_dir)
     @input_dir = File.join(@data_dir, 'psexport')
-    @output_dir = File.join(@data_dir, @zip_name)
+    @output_dir = File.join(@data_dir, 'datafiles')
+    @archive_dir = File.join(@data_dir, 'archives', Date.today.strftime("%Y-%m-%d"))
+    @zip_file_name = options['exporter']['zip_file_name']
     
-    @single_year = options['year']
+    @single_year = options['exporter']['year']
     @single_year = nil if @single_year && !VALID_YEARS.include?(@single_year)
     
     @working_at = 0
     @total_work_units = 10 * (@single_year ? 11 : 9 + 2*VALID_YEARS.size)
     tick_message("Starting job")
-    process_files
+    
+    # process_files
+    #output_files
+    package_and_archive_files
+    upload_file
   end
   
-  def zip_file_path
-    "#{@output_dir}.zip"
+  def package_and_archive_files
+    tick_message("Zipping files", 10)
+    system("rm -f #{@output_dir}/#{@zip_file_name}.zip")
+    system("zip -j #{@output_dir}/#{@zip_file_name} #{@output_dir}/*.txt")
+    
+    tick_message("Archiving zip file", 10)
+    ::File.makedirs(@archive_dir) unless ::File.directory?(@archive_dir)
+    system("cp #{@output_dir}/#{@zip_file_name}.zip #{@archive_dir}")
   end
   
-  def tick_message(message, incr=0)
-    @working_at += incr if incr > 0
-    at(@working_at, @total_work_units, message)
-  end
+  def upload_file
+    tick_message("Uploading zip file", 10)
+    zip_contents = File.open("#{@output_dir}/#{@zip_file_name}.zip").read rescue nil
+    if zip_contents && !zip_contents.empty?
+      url = URI.parse(options['webdav']['url'])
+      # puts "scheme #{url.scheme}"
+      conn = Net::HTTP.new(url.host, url.port)
+      if url.scheme == 'https'
+        conn.use_ssl = true
+      end
+      conn.start do |http|
+        req = Net::HTTP::Put.new("#{url.path}#{options['webdav']['zip_file_name']}.zip")
+        if options['webdav']['use_digest_auth']
+          # puts "digest auth"
+          # try putting something so
+          # the server will return a www-authenticate header
+          res = http.put(url.request_uri, 'hello') 
+          req.digest_auth(options['webdav']['username'], options['webdav']['password'], res)
+        else
+          # puts "basic auth"
+          req.basic_auth(options['webdav']['username'], options['webdav']['password'])
+        end
+        res = http.request(req, zip_contents)
+        puts "file upload response: #{res.code} #{res.message}"
+        # 201 created
+        # 204 no content
+        if res.code.to_s =~ /200|201|204/
+          puts "success - removing zip file"
+          system("rm -f #{@output_dir}/datadirector.zip")
+        end
+      end
+    else
+      raise "Could not read zip file for upload"
+    end
+  end  
   
-  def process_csv(path, headers, &block)
-    FasterCSV.open(path, :col_sep => "\t", :row_sep => "\n", :headers => headers) do |csv|
-      csv.header_convert { |h| h.downcase.tr(" ", "_").delete("^a-z_").to_sym }
+  def process_csv(path, hdr_check, opt_headers, &block)
+    has_header = File.open(path, "r") { |f| f.read(hdr_check.length) } == hdr_check
+    options = {
+      :col_sep => "\t", 
+      :row_sep => "\n",
+      :headers => has_header ? true : opt_headers
+    }
+    FasterCSV.open(path, options) do |csv|
+      # '[39]Alternate School Number' => :alternate_school_number
+      csv.header_convert { |h| h.downcase.tr(" ", "_").gsub(/^[^\]]+\]/,'').delete("^a-z0-9_").to_sym }
       csv.each(&block)
     end
   end
 
   def analyze_student_data(year)
     num_rows = 0
-    process_csv("#{@input_dir}/dd-students.txt", STUDENTS_HEADERS) do |row|
+    process_csv("#{@input_dir}/dd-students.txt", 'ID', STUDENTS_HEADERS) do |row|
       studentid = row[:id]
+      # puts "student #{studentid}"
       
       parent_name = "#{row[:mother_first]} #{row[:mother]}".strip
-      parent_name = "#{row[:father_first]} #{row[:father]}".strip if parent_name.empty?    
+      parent_name = "#{row[:father_first]} #{row[:father]}".strip if parent_name.empty?
 
       set_student(studentid, :ssid,       row[:state_studentnumber])
       set_student(studentid, :student_id, row[:student_number])
@@ -236,6 +292,7 @@ class DdImporter
         set_enrollment(year, studentid, :school_id,   row[:schoolid])
         set_enrollment(year, studentid, :school_code, row[:alternate_school_number])
         set_enrollment(year, studentid, :grade_level, row[:grade_level])
+        # puts "enroll student #{studentid}"
       else
         # puts "skipping enrollment for student #{studentid} entrydate #{row[:entrydate]} for year #{year}, enroll_year #{enroll_year}, enroll_status #{enroll_status}"
       end
@@ -246,7 +303,7 @@ class DdImporter
   
   def analyze_race_data
     # we bail after we get the first race...
-    process_csv("#{@input_dir}/dd-races.txt", true) do |row|
+    process_csv("#{@input_dir}/dd-races.txt", 'STUDENTID', true) do |row|
       studentid = row[:studentid]
       next unless current_student?(studentid)
       race = row[:racecd]
@@ -255,9 +312,21 @@ class DdImporter
   end
   
   def analyze_program_data
-    process_csv("#{@input_dir}/dd-programs.txt", true) do |row|
+    process_csv("#{@input_dir}/dd-programs.txt", 'FOREIGNKEY', true) do |row|
       studentid = row[:foreignkey]
       next unless current_student?(studentid)
+
+      start_date = row[:user_defined_date]
+      start_date = nil if start_date.nil? || start_date == '0/0/0'
+      start_date = parse_date(start_date) unless start_date.nil?
+      end_date = row[:user_defined_date2]
+      end_date = nil if end_date.nil? || end_date == '0/0/0'
+      end_date = parse_date(end_date) unless end_date.nil?
+      today = Date.today
+      if start_date <= today && (end_date.nil? || end_date >= today)
+        # puts "skipping program record start #{start_date} end #{end_date}"
+        next
+      end
       
       program_code = (row[:user_defined_text] || 0).to_i
       case program_code
@@ -269,8 +338,11 @@ class DdImporter
         set_student(studentid, :migrant_ed, 'Y')
       when 144 # Special Ed
         disability = nil
-        # custom has these chars: [17, 4, 3, 18, 0, 3, 50, 52, 48]
-        m = (row[:custom] || '').match(/([0-9]{3})$/)
+        # custom has these chars: [0x11, 4, 3, 0x12, 0, 3, '3', '2', '0']
+        # primary disability is the 3-digits after the other custom parsing
+        # we assume it's at the end of the field
+        m = row[:custom].match(/([0-9]{3})$/)
+        # raise "didn't match: #{row[:custom]}" unless m
         disability = m[1] if m
         set_student(studentid, :special_program,   'Y')
         set_student(studentid, :primary_disability, disability)
@@ -282,7 +354,7 @@ class DdImporter
   
   def analyze_user_data(year)
     num_rows = 0
-    process_csv("#{@input_dir}/dd-teachers.txt", TEACHERS_HEADERS) do |row|
+    process_csv("#{@input_dir}/dd-teachers.txt", 'ID', TEACHERS_HEADERS) do |row|
       userid = row[:id]
       teacherid = row[:teachernumber]
       
@@ -307,8 +379,10 @@ class DdImporter
   
   def analyze_course_data
     num_rows = 0
-    ['dd-courses-bacich.txt', 'dd-courses-kent.txt'].each do |fname|
-      process_csv("#{@input_dir}/#{fname}", COURSES_HEADERS) do |row|
+    ['dd-courses-all.txt', 'dd-courses-bacich.txt', 'dd-courses-kent.txt'].each do |fname|
+      fpath = "#{@input_dir}/#{fname}"
+      next unless File.exist?(fpath)
+      process_csv(fpath, 'COURSE_NUMBER', COURSES_HEADERS) do |row|
         courseid = row[:course_number]
         abbreviation = course_abbreviation(row[:course_name])
         set_course(courseid, :course_id,    courseid)
@@ -323,13 +397,16 @@ class DdImporter
         num_rows += 1
         tick_message("#{num_rows} courses analyzed") if num_rows % 100 == 0
       end
+      break if fname == 'dd-courses-all.txt'
     end
   end
   
   def analyze_roster_data
     num_rows = 0
-    ['dd-rosters-bacich.txt', 'dd-rosters-kent.txt'].each do |fname|
-      process_csv("#{@input_dir}/#{fname}", STUDENT_SCHEDULES_HEADERS) do |row|
+    ['dd-rosters-all.txt', 'dd-rosters-bacich.txt', 'dd-rosters-kent.txt'].each do |fname|
+      fpath = "#{@input_dir}/#{fname}"
+      next unless File.exist?(fpath)
+      process_csv(fpath, 'STUDENTID', STUDENT_SCHEDULES_HEADERS) do |row|
         courseid  = row[:course_number]
         next if EXCLUDED_COURSES.include?(courseid)
   
@@ -367,18 +444,20 @@ class DdImporter
         num_rows += 1
         tick_message("#{num_rows} roster records analyzed") if num_rows % 100 == 0
       end
+      break if fname == 'dd-rosters-all.txt'
     end
   end
   
   def output_files
+    tick_message("Preparing output files", 10)
+    ::File.makedirs(@output_dir) unless ::File.directory?(@output_dir)
+    
     roster_fields = [
       :ssid, :student_id, :teacher_id, :employee_id, 
       :school_id, :school_code, :grade_level, :period, :term, :course_id, :section_id ]
       
     course_keys = { }
         
-    ::File.makedirs(@output_dir) unless ::File.directory?(@output_dir)
-    
     years = @rosters.keys.sort { |a,b| b <=> a }
     years.each do |year|
       fname = "#{year}rosters.txt"
@@ -457,11 +536,9 @@ class DdImporter
         tick_message("#{num_rows} course records written") if num_rows % 100 == 0
       end
     end
-
-    system("zip -j -r #{@output_dir} #{@output_dir}")
     true
   end
-  
+    
   def set_course(courseid, key, value)
     (@courses[courseid] ||= { })[key] = value
   end
@@ -526,9 +603,9 @@ class DdImporter
   def process_for_single_year
     tick_message("Analyzing course data")
     analyze_course_data
-    tick_message("Analyzing teacher data", 10)
+    tick_message("Analyzing teacher data - single year", 10)
     analyze_user_data(@single_year)
-    tick_message("Analyzing student demographic data", 10)
+    tick_message("Analyzing student demographic data - single year", 10)
     analyze_student_data(@single_year)
     tick_message("Analyzing student race data", 10)
     analyze_race_data
@@ -536,9 +613,6 @@ class DdImporter
     analyze_program_data
     tick_message("Analyzing roster data", 10)
     analyze_roster_data
-    tick_message("Preparing output files", 10)
-    output_files
-    tick_message("Output files ready", 10)
   end
 
   def process_for_all_years
@@ -552,9 +626,6 @@ class DdImporter
     end
     tick_message("Analyzing roster data", 10)
     analyze_roster_data
-    tick_message("Preparing output files", 10)
-    output_files
-    tick_message("Output files ready", 10)
   end
   
   def process_files
@@ -624,6 +695,7 @@ class DdImporter
   
   def date_to_year_abbr(entrydate)
     entrydate = parse_date(entrydate)
+    raise "can't parse '#{entrydate}'" unless entrydate
     year_number = entrydate.month >= 7 ? entrydate.year-1990 : entrydate.year-1991
     year_number_to_year_abbr(year_number)
   end
@@ -641,6 +713,5 @@ class DdImporter
   end
 end
 
-DdImporter.new.perform
 
 

@@ -1,7 +1,10 @@
 DataDirector import file generator
 
-CANNOT BE FULLY AUTOMATED, because PowerSchool will not AutoSend
-race and program information!
+NOW FULLY AUTOMATED using PowerSchool Oracle queries.
+To use the Oracle queries, you need to install Oracle ruby libraries.
+
+If you want to do things manually, just comment out the ps_exporter.rb
+stuff and make sure to export things via autosend or other methods.
 
 1. RACE INFORMATION
 In tech/usm go to StudentRace
