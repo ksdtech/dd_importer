@@ -1,0 +1,14 @@
+oracle_powerschool:
+  adapter: OCI8
+  database: PSDATABASE
+  user: PSUSERNAME
+  password: PSPASSWORD
+exporter:
+  year: '10-11'
+  output_base_dir: '.'
+  zip_file_name: datadirector
+webdav:
+  url: https://DATADIRECTOR_DAV_URL
+  username: DATADIRECTOR_DAV_USER
+  password: DATADIRECTOR_DAV_PASSWORD
+  use_digest_auth: false

@@ -1,0 +1,5 @@
+app_config.yml
+*.zip
+archives/*
+datafiles/*
+psexport/*
