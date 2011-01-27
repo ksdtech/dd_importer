@@ -12,7 +12,7 @@ class PsExporter
   st.First_Name,
   st.Last_Name,
   TO_CHAR(st.DOB, 'MM/DD/YYYY') AS DOB,
-  st.Ethnicity,
+  st.FedEthnicity,
   st.Gender,
   st.Enroll_Status,
   st.Grade_Level,
@@ -30,22 +30,20 @@ class PsExporter
   TO_CHAR(st.EntryDate, 'MM/DD/YYYY') AS EntryDate,
   TO_CHAR(st.ExitDate, 'MM/DD/YYYY') AS ExitDate,
   sch.Alternate_School_Number,
-  hl.Value AS CA_HomeLanguage,
-  lf.Value AS CA_LangFluency,
-  fs.Value AS CA_FirstUSASchooling,
-  pd.Value AS CA_PrimDisability,
   pe.Value AS CA_ParentEd,
-  rfep.Value AS CA_DateRFEP
+  pl.Value AS CA_PrimaryLanguage,
+  el.Value AS CA_ELAStatus,
+  rfep.Value AS CA_DateRFEP,
+  fs.Value AS CA_FirstUSASchooling
   FROM Students st
   LEFT OUTER JOIN Schools sch ON sch.School_Number=st.SchoolID
   LEFT OUTER JOIN CustomText mf ON (mf.FieldNo={{Mother_First}} AND mf.KeyNo=st.DCID)
   LEFT OUTER JOIN CustomText ff ON (ff.FieldNo={{Father_First}} AND ff.KeyNo=st.DCID)
-  LEFT OUTER JOIN CustomText hl ON (hl.FieldNo={{CA_HomeLanguage}} AND hl.KeyNo=st.DCID)
-  LEFT OUTER JOIN CustomText lf ON (lf.FieldNo={{CA_LangFluency}} AND lf.KeyNo=st.DCID)
-  LEFT OUTER JOIN CustomText fs ON (fs.FieldNo={{CA_FirstUSASchooling}} AND fs.KeyNo=st.DCID)
-  LEFT OUTER JOIN CustomText pd ON (pd.FieldNo={{CA_PrimDisability}} AND pd.KeyNo=st.DCID)
   LEFT OUTER JOIN CustomText pe ON (pe.FieldNo={{CA_ParentEd}} AND pe.KeyNo=st.DCID)
-  LEFT OUTER JOIN CustomText rfep ON (rfep.FieldNo={{CA_DateRFEP}} AND rfep.KeyNo=st.DCID) }, 
+  LEFT OUTER JOIN CustomText pl ON (pl.FieldNo={{CA_PrimaryLanguage}} AND pl.KeyNo=st.DCID)
+  LEFT OUTER JOIN CustomText el ON (el.FieldNo={{CA_ELAStatus}} AND el.KeyNo=st.DCID)
+  LEFT OUTER JOIN CustomText rfep ON (rfep.FieldNo={{CA_DateRFEP}} AND rfep.KeyNo=st.DCID)
+  LEFT OUTER JOIN CustomText fs ON (fs.FieldNo={{CA_FirstUSASchooling}} AND fs.KeyNo=st.DCID) }, 
   
   :teacher_query => %{ 
   SELECT t.ID, t.TeacherNumber, t.SchoolID, 

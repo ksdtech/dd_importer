@@ -38,7 +38,7 @@ class DdImporter
     exitdate
     [39]alternate_school_number
     ca_parented
-    ca_homelanguage
+    ca_primarylanguage
     ca_elastatus
     ca_daterfep
     ca_firstusaschooling
@@ -176,8 +176,8 @@ class DdImporter
     @total_work_units = 10 * (@single_year ? 11 : 9 + 2*VALID_YEARS.size)
     tick_message("Starting job")
     
-    # process_files
-    #output_files
+    process_files
+    output_files
     package_and_archive_files
     upload_file
   end
@@ -219,7 +219,8 @@ class DdImporter
         # 201 created
         # 204 no content
         if res.code.to_s =~ /200|201|204/
-          puts "success - removing zip file"
+          puts "success"
+          puts "removing zip file"
           system("rm -f #{@output_dir}/datadirector.zip")
         end
       end
@@ -272,9 +273,9 @@ class DdImporter
       hispanic_ethnicity = (row[:fedethnicity].to_i == 1) ? '500' : nil
       set_student(studentid, :ethnicity,             hispanic_ethnicity)
 
-      home_language = row[:ca_homelanguage]
-      home_language = home_language.to_i unless home_language.nil?
-      set_student(studentid, :primary_language,      home_language.to_s)
+      primary_language = row[:ca_primarylanguage]
+      primary_language = primary_language.to_i unless primary_language.nil?
+      set_student(studentid, :primary_language,      primary_language.to_s)
       
       fluency = row[:ca_elastatus]
       fluency = FLUENCY_CODES.fetch(fluency.upcase, nil) unless fluency.nil?
@@ -311,19 +312,23 @@ class DdImporter
     end
   end
   
+  def nil_date?(ds)
+    ds.nil? || ds == '0/0/0' || ds == '01/01/1900'
+  end
+  
   def analyze_program_data
     process_csv("#{@input_dir}/dd-programs.txt", 'FOREIGNKEY', true) do |row|
       studentid = row[:foreignkey]
       next unless current_student?(studentid)
 
       start_date = row[:user_defined_date]
-      start_date = nil if start_date.nil? || start_date == '0/0/0'
+      start_date = nil if nil_date?(start_date)
       start_date = parse_date(start_date) unless start_date.nil?
       end_date = row[:user_defined_date2]
-      end_date = nil if end_date.nil? || end_date == '0/0/0'
+      end_date = nil if nil_date?(end_date)
       end_date = parse_date(end_date) unless end_date.nil?
       today = Date.today
-      if start_date <= today && (end_date.nil? || end_date >= today)
+      unless start_date <= today && (end_date.nil? || end_date >= today)
         # puts "skipping program record start #{start_date} end #{end_date}"
         next
       end
@@ -338,11 +343,11 @@ class DdImporter
         set_student(studentid, :migrant_ed, 'Y')
       when 144 # Special Ed
         disability = nil
-        # custom has these chars: [0x11, 4, 3, 0x12, 0, 3, '3', '2', '0']
-        # primary disability is the 3-digits after the other custom parsing
-        # we assume it's at the end of the field
-        m = row[:custom].match(/([0-9]{3})$/)
-        # raise "didn't match: #{row[:custom]}" unless m
+        # custom has these chars: 
+        # either "\x11\x04\x03\x12\x00\x03320" for '320' primary
+        # or "\x11\x04\x06\x12\x00\x03280\x11\x04\x03\x12\x00\x03320" for '280' secondary, '320' primary
+        m = row[:custom].match(/\x11\x04\x03\x12\x00\x03([0-9]{3})/)  
+        raise "custom didn't match" unless m
         disability = m[1] if m
         set_student(studentid, :special_program,   'Y')
         set_student(studentid, :primary_disability, disability)
