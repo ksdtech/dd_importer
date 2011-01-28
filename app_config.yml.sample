@@ -8,7 +8,12 @@ exporter:
   output_base_dir: '.'
   zip_file_name: datadirector
 webdav:
-  url: https://DATADIRECTOR_DAV_URL
+  url: https://DATADIRECTOR.DAV.HOST/PATH
   username: DATADIRECTOR_DAV_USER
   password: DATADIRECTOR_DAV_PASSWORD
   use_digest_auth: false
+sftp:
+  host: DATADIRECTOR.SFTP.HOST
+  path: /DATDIRECTOR_SFTP_PATH/
+  username: DATADIRECTOR_SFTP_USER
+  password: DATADIRECTOR_SFTP_PASSWORD
