@@ -2,6 +2,7 @@ require 'configatron'
 require 'faster_csv'
 require 'ftools'
 require 'net/https'
+require 'net/sftp'
 require 'net_digest_auth'
 require 'uri'
 
@@ -179,7 +180,7 @@ class DdImporter
     process_files
     output_files
     package_and_archive_files
-    upload_file
+    upload_file_by_webdav
   end
   
   def package_and_archive_files
@@ -192,7 +193,19 @@ class DdImporter
     system("cp #{@output_dir}/#{@zip_file_name}.zip #{@archive_dir}")
   end
   
-  def upload_file
+  def upload_file_by_sftp
+    begin
+      Net::SFTP.start(options['sftp']['host'], options['sftp']['username'], :password => options['sftp']['password']) do |sftp|
+        puts "Connecting via SFTP to #{options['sftp']['host']}"
+        sftp.upload!("#{@output_dir}/#{@zip_file_name}.zip", "#{options['sftp']['path']}#{@zip_file_name}.zip")
+        puts "File uploaded"
+      end
+    rescue
+      puts "SFTP error: #{$!}"
+    end
+  end
+  
+  def upload_file_by_webdav
     tick_message("Uploading zip file", 10)
     zip_contents = File.open("#{@output_dir}/#{@zip_file_name}.zip").read rescue nil
     if zip_contents && !zip_contents.empty?
@@ -202,27 +215,49 @@ class DdImporter
       if url.scheme == 'https'
         conn.use_ssl = true
       end
-      conn.start do |http|
-        req = Net::HTTP::Put.new("#{url.path}#{options['webdav']['zip_file_name']}.zip")
-        if options['webdav']['use_digest_auth']
-          # puts "digest auth"
-          # try putting something so
-          # the server will return a www-authenticate header
-          res = http.put(url.request_uri, 'hello') 
-          req.digest_auth(options['webdav']['username'], options['webdav']['password'], res)
-        else
-          # puts "basic auth"
-          req.basic_auth(options['webdav']['username'], options['webdav']['password'])
+      begin
+        conn.start do |http|
+          puts "Connecting via WebDAV to #{url.host}:#{url.port}"
+          req = Net::HTTP::Delete.new("#{url.path}#{@zip_file_name}.zip")
+          if options['webdav']['use_digest_auth']
+            # puts "digest auth"
+            # try putting something so
+            # the server will return a www-authenticate header
+            res = http.put(url.request_uri, 'hello') 
+            req.digest_auth(options['webdav']['username'], options['webdav']['password'], res)
+          else
+            # puts "basic auth"
+            req.basic_auth(options['webdav']['username'], options['webdav']['password'])
+          end
+          res = http.request(req)
+          puts "WebDAV delete response: #{res.code} #{res.message}"
+          # 201 created
+          # 204 no content
         end
-        res = http.request(req, zip_contents)
-        puts "file upload response: #{res.code} #{res.message}"
-        # 201 created
-        # 204 no content
-        if res.code.to_s =~ /200|201|204/
-          puts "success"
-          puts "removing zip file"
-          system("rm -f #{@output_dir}/datadirector.zip")
+        conn.start do |http|
+          req = Net::HTTP::Put.new("#{url.path}#{@zip_file_name}.zip")
+          if options['webdav']['use_digest_auth']
+            # puts "digest auth"
+            # try putting something so
+            # the server will return a www-authenticate header
+            res = http.put(url.request_uri, 'hello') 
+            req.digest_auth(options['webdav']['username'], options['webdav']['password'], res)
+          else
+            # puts "basic auth"
+            req.basic_auth(options['webdav']['username'], options['webdav']['password'])
+          end
+          res = http.request(req, zip_contents)
+          puts "WebDAV put response: #{res.code} #{res.message}"
+          # 201 created
+          # 204 no content
+          if res.code.to_s =~ /200|201|204/
+            puts "success"
+            puts "removing zip file"
+            system("rm -f #{@output_dir}/#{@zip_file_name}.zip")
+          end
         end
+      rescue
+        puts "WebDAV error: #{$!}"
       end
     else
       raise "Could not read zip file for upload"
