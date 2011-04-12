@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Put this file in /etc/periodic/daily 
+# chown root:wheel 812.datadirector
+# chmod 755 812.datadirector
+
+cd /usr/local/webapps/dd_importer
+. /usr/local/rvm/scripts/rvm
+. /usr/local/webapps/dd_importer/.rvmrc
+ruby app.rb
