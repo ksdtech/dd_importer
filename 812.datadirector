@@ -1,10 +1,14 @@
-#!/bin/bash
+#!/bin/bash -l
+# -l forces cron and other to reload environment
 
 # Put this file in /etc/periodic/daily 
 # chown root:wheel 812.datadirector
 # chmod 755 812.datadirector
 
+RUBYOPT="rubygems"
+export RUBYOPT
+
 cd /usr/local/webapps/dd_importer
-. /usr/local/rvm/scripts/rvm
-. /usr/local/webapps/dd_importer/.rvmrc
+# . /usr/local/rvm/scripts/rvm
+# . /usr/local/webapps/dd_importer/.rvmrc
 ruby app.rb
