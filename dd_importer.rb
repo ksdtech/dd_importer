@@ -329,13 +329,14 @@ class DdImporter
 
       enroll_status = row[:enroll_status].to_i
       enroll_year = date_to_year_abbr(row[:entrydate])
+      # puts "student #{studentid} entrydate #{row[:entrydate]} for year #{year}, enroll_year #{enroll_year}, enroll_status #{enroll_status}"
       if enroll_status == 0 || (year == enroll_year && enroll_status > 0)
         set_enrollment(year, studentid, :school_id,   row[:schoolid])
         set_enrollment(year, studentid, :school_code, row[:alternate_school_number])
         set_enrollment(year, studentid, :grade_level, row[:grade_level])
-        # puts "enroll student #{studentid}"
+        # puts "enrolled"
       else
-        # puts "skipping enrollment for student #{studentid} entrydate #{row[:entrydate]} for year #{year}, enroll_year #{enroll_year}, enroll_status #{enroll_status}"
+        # puts "skipping enrollment"
       end
       num_rows += 1
       tick_message("#{num_rows} student records analyzed") if num_rows % 100 == 0
@@ -509,22 +510,25 @@ class DdImporter
     course_keys = { }
         
     years = @rosters.keys.sort { |a,b| b <=> a }
+    years << @single_year if years.empty? && @single_year
     years.each do |year|
-      fname = "#{year}rosters.txt"
-      num_rows = 0
-      ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
-        files_written += 1
-        header_fields = roster_fields.collect { |f| f.to_s }.join("\t")
-        out.write("#{header_fields}\n")
-        members = @rosters[year].keys.sort
-        members.each do |memberid|
-          # mark courses
-          courseid = roster(year, memberid, :course_id)
-          course_keys[courseid] = 1
-          values = roster_fields.collect { |f| roster(year, memberid, f) }.join("\t")
-          out.write("#{values}\n")
-          num_rows += 1
-          tick_message("#{num_rows} roster records written for #{year}") if num_rows % 100 == 0
+      if @rosters[year]
+        fname = "#{year}rosters.txt"
+        num_rows = 0
+        ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
+          files_written += 1
+          header_fields = roster_fields.collect { |f| f.to_s }.join("\t")
+          out.write("#{header_fields}\n")
+          members = @rosters[year].keys.sort
+          members.each do |memberid|
+            # mark courses
+            courseid = roster(year, memberid, :course_id)
+            course_keys[courseid] = 1
+            values = roster_fields.collect { |f| roster(year, memberid, f) }.join("\t")
+            out.write("#{values}\n")
+            num_rows += 1
+            tick_message("#{num_rows} roster records written for #{year}") if num_rows % 100 == 0
+          end
         end
       end
       
