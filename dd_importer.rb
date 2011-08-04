@@ -103,6 +103,7 @@ class DdImporter
     '09-10' => 'YR',
     '10-11' => 'YR',
     '11-12' => 'YR',
+    '12-13' => 'YR',
     'HT 1' => 'H1',
     'HT 2' => 'H2',
     'HT 3' => 'H3',
@@ -124,7 +125,8 @@ class DdImporter
       '11-12', '12-13' ]
       
   EXCLUDED_COURSES = [ 
-    'AAAA', 'oooo' # Attendance
+    'AAAA', 'oooo', # Attendance
+    '3100', '4100'  # Bacich Math
   ] 
   
   NON_EXCLUDED_COURSES = [
@@ -305,6 +307,8 @@ class DdImporter
       set_student(studentid, :first_us_entry_date,   clean_date(row[:ca_firstusaschooling]))
       set_student(studentid, :date_rfep,             clean_date(row[:ca_daterfep]))
 
+      # Before we update based on race codes, we set the "primary" ethnicity
+      # to '500' if the student is hispanic/latino
       hispanic_ethnicity = (row[:fedethnicity].to_i == 1) ? '500' : nil
       set_student(studentid, :ethnicity,             hispanic_ethnicity)
 
@@ -336,7 +340,7 @@ class DdImporter
       tick_message("#{num_rows} student records analyzed") if num_rows % 100 == 0
     end
   end
-  
+
   def analyze_race_data
     # we bail after we get the first race...
     process_csv("#{@input_dir}/dd-races.txt", 'STUDENTID', true) do |row|
