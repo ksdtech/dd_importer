@@ -180,41 +180,44 @@ class PsExporter
   def run_query(query_name, fname, min_termid=nil)
     puts "processing #{query_name}..."
     num_rows = 0
+    header = true
     sql = QUERIES[query_name].gsub(/\{\{([^}]+)\}\}/) do |field|
       custom_field_number($1)
     end
     if query_name == :roster_query && !min_termid.nil?
       sql << " WHERE ABS(cc.TermID)>=#{min_termid}"
     end
-    f = nil
     sth = @dbh.execute(sql)
-    while row = sth.fetch do
-      if f.nil?
-        f = ::File.open(fname, "w")
-        f.write row.column_names.join("\t")
-        f.write "\n"
-      end
-      vals = [ ] 
-      row.each_with_name do |val, name|
-        if val.is_a?(Float) || val.is_a?(BigDecimal)
-          val = val.to_i 
-        else
-          if val.is_a?(OCI8::BFILE) || val.is_a?(OCI8::BLOB) || val.is_a?(OCI8::CLOB)
-            val = val.read
+    if sth
+      File.open(fname, "w") do |f|
+        while row = sth.fetch do
+          if header
+            f.write row.column_names.join("\t")
+            f.write "\n"
+            header = false
           end
-          val = val.to_s.gsub(/"/, "'")
+          vals = [ ] 
+          row.each_with_name do |val, name|
+            if val.is_a?(Float) || val.is_a?(BigDecimal)
+              val = val.to_i 
+            else
+              if val.is_a?(OCI8::BFILE) || val.is_a?(OCI8::BLOB) || val.is_a?(OCI8::CLOB)
+                val = val.read
+              end
+              val = val.to_s.gsub(/"/, "'")
+            end
+            vals << val
+          end
+          f.write vals.join("\t")
+          f.write "\n"
+          num_rows += 1
+          tick_message("Processed #{num_rows} rows in #{query_name}") if num_rows % 100 == 0
         end
-        vals << val
+        puts " #{num_rows} rows written to #{fname}"
       end
-      f.write vals.join("\t")
-      f.write "\n"
-      num_rows += 1
-      tick_message("Processed #{num_rows} rows in #{query_name}") if num_rows % 100 == 0
+      sth.finish
     end
-    puts " #{num_rows} rows written to #{fname}"
-    sth.finish
-    f.close if f
-    !f.nil?
+    num_rows != 0
   end
 
   # can raise exception
@@ -232,25 +235,26 @@ class PsExporter
   def run_powerschool_queries
     connect_db
     if @dbh
-      min_termid = @single_year.nil? ? nil : year_abbr_to_term(@single_year)
       ::File.makedirs(@input_dir) unless ::File.directory?(@input_dir)
-
-      tick_message("Querying student program data", 10)
-      run_query(:program_query, "#{@input_dir}/dd-programs.txt")
-      tick_message("Querying student race/ethnicity data", 10)
-      run_query(:race_query, "#{@input_dir}/dd-races.txt")
-      tick_message("Querying student demographic and current enrollment data")
-      run_query(:student_query, "#{@input_dir}/dd-students.txt")
+      
+      min_termid = @single_year.nil? ? nil : year_abbr_to_term(@single_year)
+      tick_message("Exporting for year '#{@single_year}'")
       tick_message("Querying school data", 10)
       run_query(:school_query,  "#{@input_dir}/dd-schools.txt")
+      tick_message("Querying teacher data", 10)
+      run_query(:teacher_query, "#{@input_dir}/dd-teachers.txt")
       tick_message("Querying course data", 10)
       course_file = run_query(:course_query,  "#{@input_dir}/dd-courses-all.txt")
       system("rm #{@input_dir}/dd-courses-{bacich,kent}.txt") if course_file
+      tick_message("Querying student demographics for current enrollment")
+      run_query(:student_query, "#{@input_dir}/dd-students.txt")
       tick_message("Querying prior enrollment data", 10)
       run_query(:reenrollment_query, "#{@input_dir}/dd-reenrollments.txt")
-      tick_message("Querying teacher data", 10)
-      run_query(:teacher_query, "#{@input_dir}/dd-teachers.txt")
-      tick_message("Querying student demographic data", 10)
+      tick_message("Querying student race/ethnicity data", 10)
+      run_query(:race_query, "#{@input_dir}/dd-races.txt")
+      tick_message("Querying student program data", 10)
+      run_query(:program_query, "#{@input_dir}/dd-programs.txt")
+      tick_message("Querying student roster data with min_termid '#{min_termid}'", 10)
       roster_file = run_query(:roster_query,  "#{@input_dir}/dd-rosters-all.txt", min_termid)
       system("rm #{@input_dir}/dd-rosters-{bacich,kent}.txt") if roster_file
       tick_message("All data extracted", 10)

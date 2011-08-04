@@ -180,9 +180,10 @@ class DdImporter
     tick_message("Starting job")
     
     process_files
-    output_files
-    package_and_archive_files
-    upload_file_by_webdav
+    if output_files
+      package_and_archive_files
+      upload_file_by_webdav
+    end
   end
   
   def package_and_archive_files
@@ -493,9 +494,14 @@ class DdImporter
   end
   
   def output_files
+    files_written = 0
     tick_message("Preparing output files", 10)
-    ::File.makedirs(@output_dir) unless ::File.directory?(@output_dir)
-    
+    if ::File.directory?(@output_dir)
+      system("rm -f #{@output_dir}/*")
+    else
+      ::File.makedirs(@output_dir)
+    end
+      
     roster_fields = [
       :ssid, :student_id, :teacher_id, :employee_id, 
       :school_id, :school_code, :grade_level, :period, :term, :course_id, :section_id ]
@@ -507,6 +513,7 @@ class DdImporter
       fname = "#{year}rosters.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
+        files_written += 1
         header_fields = roster_fields.collect { |f| f.to_s }.join("\t")
         out.write("#{header_fields}\n")
         members = @rosters[year].keys.sort
@@ -526,6 +533,7 @@ class DdImporter
       fname = "#{year}users.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
+        files_written += 1
         header_fields = user_fields.collect { |f| f.to_s }.join("\t")
         out.write("#{header_fields}\n")
         teachers = @teacher_years[year].keys
@@ -547,6 +555,7 @@ class DdImporter
       fname = "#{year}demo.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
+        files_written += 1
         header_fields = demo_fields.collect { |f| f.to_s }.join("\t")
         out.write("#{header_fields}\n")
         if @enrollments[year]
@@ -566,21 +575,25 @@ class DdImporter
     end
     
     # note: can we do subject mapping?
-    course_fields = [ :course_id, :abbreviation, :name,
-      :credits, :subject_code, :a_to_g, :school_id, :school_code ]
-    fname = "courses.txt"
-    num_rows = 0
-    ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
-      header_fields = course_fields.collect { |f| f.to_s }.join("\t")
-      out.write("#{header_fields}\n")
-      course_keys.each_key do |courseid|
-        values = course_fields.collect { |f| course(courseid, f) }.join("\t")
-        out.write("#{values}\n")
-        num_rows += 1
-        tick_message("#{num_rows} course records written") if num_rows % 100 == 0
+    unless course_keys.empty?
+      course_fields = [ :course_id, :abbreviation, :name,
+        :credits, :subject_code, :a_to_g, :school_id, :school_code ]
+      fname = "courses.txt"
+      num_rows = 0
+      ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
+        files_written += 1
+        header_fields = course_fields.collect { |f| f.to_s }.join("\t")
+        out.write("#{header_fields}\n")
+        course_keys.each_key do |courseid|
+          values = course_fields.collect { |f| course(courseid, f) }.join("\t")
+          out.write("#{values}\n")
+          num_rows += 1
+          tick_message("#{num_rows} course records written") if num_rows % 100 == 0
+        end
       end
     end
-    true
+
+    files_written != 0
   end
     
   def set_course(courseid, key, value)
