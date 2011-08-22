@@ -698,7 +698,11 @@ class DdImporter
   end
   
   def expression_to_period(expr)
-    expr.nil? ? nil : expr.gsub(/[^0-9].*$/, '').to_i
+    return nil if expr.nil?
+    period = expr.gsub(/[^0-9].*$/, '').to_i
+    return nil if period == 0
+    # DD only allows 9 periods
+    period > 9 ? 9 : period
   end
   
   def term_abbreviation(term_abbr)
