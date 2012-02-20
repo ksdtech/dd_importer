@@ -459,9 +459,13 @@ class DdImporter
         studentid = row[:studentid]
         next unless current_student?(studentid)
         
+        termid = row[:termid]
+        # reject negative termid's - dropped sections
+        next if termid.nil? || termid[0,1] == '-'
+        
         sectionid = row[:sectionid]
-        next if sectionid.nil?
-        sectionid.gsub!(/^[-]/, '')
+        # reject negative sectionid's - dropped sections
+        next if sectionid.nil? || sectionid[0,1] == '-'
         
         period = expression_to_period(row[:expression])
         next if period.nil?
@@ -470,7 +474,7 @@ class DdImporter
         next if term.nil?
         
         memberid = "#{courseid}-#{studentid}"
-        year = term_to_year_abbr(row[:termid].gsub(/^[-]/, ''))
+        year = term_to_year_abbr(termid)
       
         userid = row[:teacherid]
         set_teacher_year(year, userid, :active, 'y')
