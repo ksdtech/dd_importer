@@ -43,6 +43,11 @@ class DdImporter
     ca_elastatus
     ca_daterfep
     ca_firstusaschooling
+    ca_gate
+    ca_migranted
+    ca_primdisability
+    ca_titlei_targeted
+    ethnicity
   }
 
   TEACHERS_HEADERS = %w{
@@ -167,6 +172,8 @@ class DdImporter
     input_dir = options['exporter']['input_dir'] # can be nil
     output_base_dir = options['exporter']['output_base_dir'] or raise "No output_base_dir specified"
     
+    @use_race_file = options['exporter']['use_race_file']
+    @use_program_file = options['exporter']['use_program_file']
     @data_dir = File.expand_path(output_base_dir)
     @input_dir = input_dir ? File.expand_path(input_dir) : File.join(@data_dir, 'psexport')
     @output_dir = File.join(@data_dir, 'datafiles')
@@ -309,10 +316,14 @@ class DdImporter
       set_student(studentid, :first_us_entry_date,   clean_date(row[:ca_firstusaschooling]))
       set_student(studentid, :date_rfep,             clean_date(row[:ca_daterfep]))
 
-      # Before we update based on race codes, we set the "primary" ethnicity
-      # to '500' if the student is hispanic/latino
-      hispanic_ethnicity = (row[:fedethnicity].to_i == 1) ? '500' : nil
-      set_student(studentid, :ethnicity,             hispanic_ethnicity)
+      if @use_race_file
+        # Before we update based on race codes, we set the "primary" ethnicity
+        # to '500' if the student is hispanic/latino
+        hispanic_ethnicity = (row[:fedethnicity].to_i == 1) ? '500' : nil
+        set_student(studentid, :ethnicity,             hispanic_ethnicity)
+      else
+        set_student(studentid, :ethnicity, row[:ethnicity])
+      end
 
       primary_language = row[:ca_primarylanguage]
       primary_language = primary_language.to_i unless primary_language.nil?
@@ -327,6 +338,16 @@ class DdImporter
       set_student(studentid, :migrant_ed, 'N')
       set_student(studentid, :special_program, 'N')
       set_student(studentid, :title_1,    'N')
+      if !@use_program_file
+        set_student(studentid, :gate,       'Y') if row[:ca_gate] =~ /Yes/i
+        # set_student(studentid, :nslp,       'Y') if ?
+        set_student(studentid, :migrant_ed, 'Y') if row[:ca_migranted] =~ /Yes/i
+        if row[:ca_primdisability] && row[:ca_primdisability] != '000' # Special Ed
+          set_student(studentid, :special_program,   'Y')
+          set_student(studentid, :primary_disability, row[:ca_primdisability])
+        end
+        set_student(studentid, :title_1,    'Y') if row[:ca_titlei_targeted]
+      end
 
       enroll_status = row[:enroll_status].to_i
       enroll_year = date_to_year_abbr(row[:entrydate])
@@ -673,10 +694,14 @@ class DdImporter
     analyze_user_data(@single_year)
     tick_message("Analyzing student demographic data - single year", 10)
     analyze_student_data(@single_year)
-    tick_message("Analyzing student race data", 10)
-    analyze_race_data
-    tick_message("Analyzing student program data", 10)
-    analyze_program_data
+    if @use_race_file
+      tick_message("Analyzing student race data", 10)
+      analyze_race_data
+    end
+    if @use_program_file
+      tick_message("Analyzing student program data", 10)
+      analyze_program_data
+    end
     tick_message("Analyzing roster data", 10)
     analyze_roster_data
   end
