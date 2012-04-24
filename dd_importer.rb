@@ -164,10 +164,11 @@ class DdImporter
     @teacher_years = { }
     @custom_fields = { }
     
+    input_dir = options['exporter']['input_dir'] # can be nil
     output_base_dir = options['exporter']['output_base_dir'] or raise "No output_base_dir specified"
     
     @data_dir = File.expand_path(output_base_dir)
-    @input_dir = File.join(@data_dir, 'psexport')
+    @input_dir = input_dir ? File.expand_path(input_dir) : File.join(@data_dir, 'psexport')
     @output_dir = File.join(@data_dir, 'datafiles')
     @archive_dir = File.join(@data_dir, 'archives', Date.today.strftime("%Y-%m-%d"))
     @zip_file_name = options['exporter']['zip_file_name']
