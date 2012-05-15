@@ -8,7 +8,7 @@
 RUBYOPT="rubygems"
 export RUBYOPT
 
-cd /usr/local/webapps/dd_importer
+cd /Volumes/kweb-d0-content/webapps-root/dd_importer
 # . /usr/local/rvm/scripts/rvm
-# . /usr/local/webapps/dd_importer/.rvmrc
+# . /Volumes/kweb-d0-content/webapps-root/dd_importer/.rvmrc
 ruby app.rb
