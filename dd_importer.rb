@@ -1,5 +1,5 @@
 require 'configatron'
-require 'faster_csv'
+require 'fastercsv'
 require 'ftools'
 require 'net/https'
 require 'net/sftp'
@@ -127,7 +127,7 @@ class DdImporter
   VALID_YEARS = 
     [ '01-02', '02-03', '03-04', '04-05', '05-06',
       '06-07', '07-08', '08-09', '09-10', '10-11',
-      '11-12', '12-13' ]
+      '11-12', '12-13', '13-14', '14-15' ]
       
   EXCLUDED_COURSES = [ 
     'AAAA', 'oooo', # Attendance
@@ -181,6 +181,15 @@ class DdImporter
     @zip_file_name = options['exporter']['zip_file_name']
     
     @single_year = options['exporter']['year']
+    if @single_year == 'auto'
+      d = Date.today
+      year = d.year
+      if d.month > 8 || (d.month == 8 && d.day >= 15)
+        year += 1
+      end
+      @single_year = "#{(year-1) % 100}-#{year % 100}"
+      # puts "auto year: #{@single_year}"
+    end
     @single_year = nil if @single_year && !VALID_YEARS.include?(@single_year)
     
     @working_at = 0
