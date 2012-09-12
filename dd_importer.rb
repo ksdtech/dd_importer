@@ -548,7 +548,7 @@ class DdImporter
     years << @single_year if years.empty? && @single_year
     years.each do |year|
       if @rosters[year]
-        fname = "#{year}rosters.txt"
+        fname = @single_year ? "rosters_Kentfield.txt" : "#{year}rosters.txt"
         num_rows = 0
         ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
           files_written += 1
@@ -569,7 +569,7 @@ class DdImporter
       
       user_fields = [ :employee_id, :teacher_id, :school_id, :school_code, 
         :first_name, :last_name, :email_address ]
-      fname = "#{year}users.txt"
+      fname =  @single_year ? "users_Kentfield.txt" : "#{year}users.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
         files_written += 1
@@ -591,7 +591,7 @@ class DdImporter
         :date_entered_school, :date_entered_district, :first_us_entry_date,
         :gate, :primary_disability, :nslp, :parent_education, :migrant_ed,
         :date_rfep, :special_program, :title_1 ]
-      fname = "#{year}demo.txt"
+      fname =  @single_year ? "demo_Kentfield.txt" : "#{year}demo.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
         files_written += 1
@@ -617,7 +617,7 @@ class DdImporter
     unless course_keys.empty?
       course_fields = [ :course_id, :abbreviation, :name,
         :credits, :subject_code, :a_to_g, :school_id, :school_code ]
-      fname = "courses.txt"
+      fname = "courses_Kentfield.txt"
       num_rows = 0
       ::File.open("#{@output_dir}/#{fname}", 'w') do |out|
         files_written += 1
