@@ -1,3 +1,4 @@
+require 'rubygems'
 require 'configatron'
 require 'fastercsv'
 require 'ftools'
@@ -109,6 +110,8 @@ class DdImporter
     '10-11' => 'YR',
     '11-12' => 'YR',
     '12-13' => 'YR',
+    '13-14' => 'YR',
+    '14-15' => 'YR',
     'HT 1' => 'H1',
     'HT 2' => 'H2',
     'HT 3' => 'H3',
@@ -191,6 +194,17 @@ class DdImporter
       # puts "auto year: #{@single_year}"
     end
     @single_year = nil if @single_year && !VALID_YEARS.include?(@single_year)
+
+    @single_school = options['exporter']['school']
+        
+    @uploads = true
+    if options['exporter'].key?('uploads')
+      @uploads = options['exporter']['uploads']
+    end
+    
+    # puts "single_year: #{@single_year}"
+    # puts "single_school: #{@single_school}"
+    # puts "uploads: #{@uploads}"
     
     @working_at = 0
     @total_work_units = 10 * (@single_year ? 11 : 9 + 2*VALID_YEARS.size)
@@ -198,8 +212,10 @@ class DdImporter
     
     process_files
     if output_files
-      package_and_archive_files
-      upload_file_by_webdav
+      if false # if @uploads
+        package_and_archive_files
+        upload_file_by_webdav
+      end
     end
   end
   
@@ -302,6 +318,11 @@ class DdImporter
     num_rows = 0
     process_csv("#{@input_dir}/dd-students.txt", 'ID', STUDENTS_HEADERS) do |row|
       studentid = row[:id]
+      schoolid = row[:schoolid].to_i
+      if @single_school && schoolid != @single_school
+        puts "skipping student #{studentid}; wrong school"
+        next
+      end
       # puts "student #{studentid}"
       
       parent_name = "#{row[:mother_first]} #{row[:mother]}".strip
@@ -362,7 +383,7 @@ class DdImporter
       enroll_year = date_to_year_abbr(row[:entrydate])
       # puts "student #{studentid} entrydate #{row[:entrydate]} for year #{year}, enroll_year #{enroll_year}, enroll_status #{enroll_status}"
       if enroll_status == 0 || (year == enroll_year && enroll_status > 0)
-        set_enrollment(year, studentid, :school_id,   row[:schoolid])
+        set_enrollment(year, studentid, :school_id,   schoolid)
         set_enrollment(year, studentid, :school_code, row[:alternate_school_number])
         set_enrollment(year, studentid, :grade_level, row[:grade_level])
         # puts "enrolled"
