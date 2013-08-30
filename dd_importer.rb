@@ -212,7 +212,7 @@ class DdImporter
     
     process_files
     if output_files
-      if false # if @uploads
+      if @uploads
         package_and_archive_files
         upload_file_by_webdav
       end
