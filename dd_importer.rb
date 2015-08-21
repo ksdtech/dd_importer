@@ -112,6 +112,8 @@ class DdImporter
     '12-13' => 'YR',
     '13-14' => 'YR',
     '14-15' => 'YR',
+    '15-16' => 'YR',
+    '16-17' => 'YR',
     'HT 1' => 'H1',
     'HT 2' => 'H2',
     'HT 3' => 'H3',
@@ -130,7 +132,7 @@ class DdImporter
   VALID_YEARS = 
     [ '01-02', '02-03', '03-04', '04-05', '05-06',
       '06-07', '07-08', '08-09', '09-10', '10-11',
-      '11-12', '12-13', '13-14', '14-15' ]
+      '11-12', '12-13', '13-14', '14-15', '15-16', '16-17' ]
       
   EXCLUDED_COURSES = [ 
     'AAAA', 'oooo', # Attendance
@@ -191,7 +193,7 @@ class DdImporter
         year += 1
       end
       @single_year = "#{(year-1) % 100}-#{year % 100}"
-      # puts "auto year: #{@single_year}"
+      puts "auto year: #{@single_year}"
     end
     @single_year = nil if @single_year && !VALID_YEARS.include?(@single_year)
 
@@ -468,6 +470,7 @@ class DdImporter
       if row[:status].to_i == 1 && 
         (row[:datadirector_access].to_i == 1 || row[:staffstatus].to_i == 1)
         set_teacher_year(year, userid, :active, 'y')
+        puts "teacher #{row[:last_name]} active for year #{year}"
       end
       
       num_rows += 1
