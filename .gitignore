@@ -1,4 +1,6 @@
 app_config.yml
+app_config.py
+*.pyc
 *.zip
 archives/*
 datafiles/*
