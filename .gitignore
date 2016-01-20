@@ -2,6 +2,7 @@ app_config.yml
 app_config.py
 *.pyc
 *.zip
+output/*
 archives/*
 datafiles/*
 psexport/*
