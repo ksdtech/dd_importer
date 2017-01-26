@@ -155,6 +155,11 @@ NON_EXCLUDED_COURSES = [
   '0700', '1700', '2700', '3700', '4700', # Bacich PE
 ]
 
+CO_TEACHERS = {
+	'103015': [ '103248' ],   # Caulkins -> Teasdale
+	'103030': [ '103179' ],   # CJ -> Swan
+}
+
 class DdImporter:
   def __init__(self):
     self.rosters = { }
@@ -522,10 +527,30 @@ class DdImporter:
         num_rows += 1
         if num_rows % 100 == 0:
           print('%d roster records analyzed' % num_rows) 
+        
+        if userid in CO_TEACHERS:
+          for co_teacherid in CO_TEACHERS[userid]:
+            self.set_teacher_year(year, co_teacherid, 'active', 'y')
+          
+            memberid = '-'.join([ courseid, studentid, co_teacherid ])
+            self.set_roster(year, memberid, 'ssid',        self.student(studentid, 'ssid'))
+            self.set_roster(year, memberid, 'student_id',  self.student(studentid, 'student_id'))
+            self.set_roster(year, memberid, 'teacher_id',  self.user(co_teacherid, 'teacher_id'))
+            self.set_roster(year, memberid, 'employee_id', self.user(co_teacherid, 'employee_id'))
+            self.set_roster(year, memberid, 'school_id',   row['schoolid'])
+            self.set_roster(year, memberid, 'school_code', row['alternate_school_number'])
+            self.set_roster(year, memberid, 'grade_level', self.enrollment(year, studentid, 'grade_level'))
+            self.set_roster(year, memberid, 'period',      period)
+            self.set_roster(year, memberid, 'term',        term)
+            self.set_roster(year, memberid, 'course_id',   courseid)
+            self.set_roster(year, memberid, 'section_id',  sectionid)
+          
+            num_rows = num_rows + 1
+            if num_rows % 100 == 0:
+              print('%d roster records analyzed' % num_rows) 
 
       if fname == 'dd-rosters-all.txt':
         break 
-
 
   def output_files(self):
     files_written = 0
