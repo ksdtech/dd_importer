@@ -155,9 +155,10 @@ NON_EXCLUDED_COURSES = [
   '0700', '1700', '2700', '3700', '4700', # Bacich PE
 ]
 
+# Map lead teacher ID to co-teacher IDs (use ID field, not TeacherNumber)
 CO_TEACHERS = {
-	'103015': [ '103248' ],   # Caulkins -> Teasdale
-	'103030': [ '103179' ],   # CJ -> Swan
+	'804': [ '4636' ],   # Caulkins -> Teasdale
+	'597': [ '1913' ],   # CJ -> Swan
 }
 
 class DdImporter:
